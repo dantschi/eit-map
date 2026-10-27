@@ -105,8 +105,8 @@ node tools/render-og-image.cjs       # Vorschaubild → assets/og-image.png
 
 ## Vor der Veröffentlichung
 
-- [ ] Impressum und Datenschutzerklärung verlinken
 - [ ] Zuordnung Module ↔ Berufsbilder und die Texte fachlich gegenlesen
+- [ ] Offizielles Logo der DHBW Stuttgart einsetzen (Stelle im Kopfbereich von `index.html` markiert)
 
 ## Lizenzen
 
