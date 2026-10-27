@@ -1,27 +1,33 @@
 /**
  * Map of Electrical Engineering
- * Baut die Karte aus js/data.js und steuert Animationen, Tooltips,
- * Pfad-Hervorhebung und das Farbschema. Keine Abhängigkeiten, läuft auch
- * direkt per Doppelklick (file://).
+ * Baut die Karte aus js/data.js (Inhalte) und js/icons.js (Icons) und steuert
+ * Hervorhebungen, Tooltips, den Studienrichtungs-Filter und das Farbschema.
+ * Keine Abhängigkeiten, läuft auch direkt per Doppelklick (file://).
  */
 (() => {
   'use strict';
 
   const DATA = window.EIT_MAP;
+  const ICONS = window.EIT_ICONS || {};
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const W = DATA.width;
   const H = DATA.height;
+  const SR = DATA.studienrichtungen;
 
-  /** Durchmesser der Stations-Scheiben in Karteneinheiten */
-  const SIZES = { base: 96, station: 76, crown: 104, perk: 64 };
-  /** Aufbau-Animation: Startzeit und Dauer pro Ebene in Sekunden */
-  const INTRO_START = 0.3;
-  const INTRO_STEP = 0.38;
-  const INTRO_END = INTRO_START + 5 * INTRO_STEP + 0.4;
+  /** Höhe des Titelbereichs je Regionsart (Karteneinheiten) */
+  const TITLE_H = { field: 66, study: 62, fund: 46 };
+  /** Flüsse mit weniger Modulbezügen werden nicht gezeichnet (Übersichtlichkeit) */
+  const FLOW_MIN = 2;
+  /** Ab diesem Anteil passender Module gilt ein Berufsbild als passend zur Studienrichtung */
+  const FIT_THRESHOLD = 0.45;
+  const FIT_STRONG = 0.65;
 
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const nodesById = new Map(DATA.nodes.map((n) => [n.id, n]));
-  const branchNodes = (branch) => DATA.nodes.filter((n) => n.branch === branch).map((n) => n.id);
+  const regionsById = new Map(DATA.regions.map((r) => [r.id, r]));
+  const modulesById = new Map(DATA.modules.map((m) => [m.id, m]));
+  const jobsById = new Map(DATA.jobs.map((j) => [j.id, j]));
+  const jobsByModule = new Map(DATA.modules.map((m) => [m.id, []]));
+  for (const job of DATA.jobs) for (const id of job.modules) jobsByModule.get(id)?.push(job);
 
   /* ---------------------------------------------------------------------- */
   /* Hilfsfunktionen                                                         */
@@ -36,13 +42,36 @@
   const escapeHtml = (s) =>
     String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-  /** S-Kurve mit senkrechten Tangenten – so wirken die Verbindungen gewachsen. */
-  function curveTo(a, b) {
-    const dy = (b.y - a.y) * 0.55;
-    return `C${a.x} ${a.y + dy} ${b.x} ${b.y - dy} ${b.x} ${b.y}`;
+  /** Bedingte Trennstellen (&shy;) aus den Daten fürs Vorlesen entfernen */
+  const plain = (s) => s.replace(/­/g, '');
+
+  const icon = (name) =>
+    `<svg class="ico" viewBox="0 0 64 64" aria-hidden="true" focusable="false">${ICONS[name] || ''}</svg>`;
+
+  const r1 = (v) => Math.round(v * 10) / 10;
+  const pct = (v, total) => `${(v / total) * 100}%`;
+
+  /** Deterministischer Zufall, damit die Karte bei jedem Laden gleich aussieht */
+  function seeded(str) {
+    let h = 2166136261;
+    for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    return () => {
+      h = Math.imul(h ^ (h >>> 15), 2246822507);
+      h = Math.imul(h ^ (h >>> 13), 3266489909);
+      h ^= h >>> 16;
+      return (h >>> 0) / 4294967296;
+    };
   }
 
-  const levelDelay = (level) => INTRO_START + Math.max(0, level - 1) * INTRO_STEP;
+  const isUnitOnly = (m) => Object.values(m.sr).every((k) => k === 'W');
+
+  /** Wie gut passt ein Berufsbild zu einer Studienrichtung? (0 … 1, Fundament zählt nicht) */
+  function fit(job, sr) {
+    const own = job.modules.map((id) => modulesById.get(id)).filter((m) => m.region !== 'fund');
+    if (!own.length) return 0;
+    const score = own.reduce((sum, m) => sum + (m.sr[sr] === 'P' ? 1 : m.sr[sr] === 'W' ? 0.6 : 0), 0);
+    return score / own.length;
+  }
 
   /* ---------------------------------------------------------------------- */
   /* Farbschema (hell / dunkel)                                             */
@@ -50,272 +79,422 @@
   function initTheme() {
     const root = document.documentElement;
     const button = document.querySelector('[data-theme-toggle]');
-    const systemLight = window.matchMedia('(prefers-color-scheme: light)');
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
     const stored = () => {
       try { return localStorage.getItem('eit-theme'); } catch { return null; }
     };
-
     const apply = (theme) => {
       root.dataset.theme = theme;
       button?.setAttribute('aria-label', theme === 'dark' ? 'Helles Design aktivieren' : 'Dunkles Design aktivieren');
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#05060f' : '#f3f5fc');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0f1f' : '#f6f1e7');
     };
-
-    apply(root.dataset.theme || (systemLight.matches ? 'light' : 'dark'));
-
+    apply(root.dataset.theme || (systemDark.matches ? 'dark' : 'light'));
     button?.addEventListener('click', () => {
       const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
       apply(next);
       try { localStorage.setItem('eit-theme', next); } catch { /* privater Modus */ }
     });
-    systemLight.addEventListener('change', (e) => {
-      if (!stored()) apply(e.matches ? 'light' : 'dark');
+    systemDark.addEventListener('change', (e) => {
+      if (!stored()) apply(e.matches ? 'dark' : 'light');
     });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Layout: Regionen aus den Zeilen berechnen, Einträge darin verteilen     */
+  /* ---------------------------------------------------------------------- */
+  function computeLayout() {
+    const { margin, gap, rows } = DATA.layout;
+    rows.forEach((row, rowIndex) => {
+      const weights = row.weights || row.regions.map(() => 1);
+      const total = weights.reduce((a, b) => a + b, 0);
+      const avail = W - 2 * margin - gap * (row.regions.length - 1);
+      let x = margin;
+      row.regions.forEach((id, i) => {
+        const w = (avail * weights[i]) / total;
+        Object.assign(regionsById.get(id), { box: { x, y: row.y, w, h: row.h }, row: rowIndex });
+        x += w + gap;
+      });
+    });
+    for (const region of DATA.regions) {
+      const list = region.kind === 'field' ? DATA.jobs : DATA.modules;
+      region.items = list.filter((it) => it.region === region.id);
+      placeItems(region);
+    }
+  }
+
+  function placeItems(region) {
+    const { x, y, w, h } = region.box;
+    const n = region.items.length;
+    const cols = Math.min(region.cols, n);
+    const rows = Math.ceil(n / cols);
+    const padX = 10;
+    const top = y + TITLE_H[region.kind];
+    const cw = (w - 2 * padX) / cols;
+    const ch = (y + h - 10 - top) / rows;
+    region.items.forEach((it, i) => {
+      const rnd = seeded(it.id);
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      let cx = x + padX + cw * (col + 0.5);
+      let cy = top + ch * (row + 0.5);
+      if (region.kind === 'field') {
+        cx += (row % 2 ? 1 : -1) * w * 0.045 + (rnd() - 0.5) * 6; // leichter Zickzack wie auf einem Wanderweg
+        cy -= 20; // Abzeichen oben, Beschriftung darunter
+      } else if (region.kind === 'fund') {
+        cy += -16 + (rnd() - 0.5) * 10;
+      } else {
+        cx += (rnd() - 0.5) * cw * 0.1;
+        cy += (rnd() - 0.5) * ch * 0.14;
+      }
+      Object.assign(it, { x: cx, y: cy, cellW: cw });
+    });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Organische Regionen ("Länder") wie auf einer gezeichneten Karte        */
+  /* ---------------------------------------------------------------------- */
+  function roundedRectPoint(b, r, t) {
+    const straightW = b.w - 2 * r;
+    const straightH = b.h - 2 * r;
+    const quarter = (Math.PI * r) / 2;
+    const segments = [straightW, quarter, straightH, quarter, straightW, quarter, straightH, quarter];
+    let i = 0;
+    while (i < 7 && t > segments[i]) t -= segments[i++];
+    const arc = (cx, cy, a0) => {
+      const a = a0 + t / r;
+      return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a), nx: Math.cos(a), ny: Math.sin(a) };
+    };
+    switch (i) {
+      case 0: return { x: b.x + r + t, y: b.y, nx: 0, ny: -1 };
+      case 1: return arc(b.x + b.w - r, b.y + r, -Math.PI / 2);
+      case 2: return { x: b.x + b.w, y: b.y + r + t, nx: 1, ny: 0 };
+      case 3: return arc(b.x + b.w - r, b.y + b.h - r, 0);
+      case 4: return { x: b.x + b.w - r - t, y: b.y + b.h, nx: 0, ny: 1 };
+      case 5: return arc(b.x + r, b.y + b.h - r, Math.PI / 2);
+      case 6: return { x: b.x, y: b.y + b.h - r - t, nx: -1, ny: 0 };
+      default: return arc(b.x + r, b.y + r, Math.PI);
+    }
+  }
+
+  function blobPath(box, seed, wobble = 5) {
+    const rnd = seeded(seed);
+    const r = Math.min(34, box.w / 4, box.h / 4);
+    const perimeter = 2 * (box.w + box.h) - 8 * r + 2 * Math.PI * r;
+    const n = Math.max(14, Math.round(perimeter / 70));
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const p = roundedRectPoint(box, r, ((i + rnd() * 0.3) / n) * perimeter);
+      const off = (rnd() - 0.5) * 2 * wobble;
+      pts.push([p.x + p.nx * off, p.y + p.ny * off]);
+    }
+    // geschlossene Catmull-Rom-Kurve → kubische Béziers
+    let d = `M${r1(pts[0][0])} ${r1(pts[0][1])}`;
+    for (let i = 0; i < n; i++) {
+      const p0 = pts[(i - 1 + n) % n];
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % n];
+      const p3 = pts[(i + 2) % n];
+      d += `C${r1(p1[0] + (p2[0] - p0[0]) / 6)} ${r1(p1[1] + (p2[1] - p0[1]) / 6)} `
+        + `${r1(p2[0] - (p3[0] - p1[0]) / 6)} ${r1(p2[1] - (p3[1] - p1[1]) / 6)} ${r1(p2[0])} ${r1(p2[1])}`;
+    }
+    return `${d}Z`;
+  }
+
+  /** Sankey-Band: gefüllte Fläche zwischen zwei S-Kurven der Breite w */
+  function ribbon(ax, ay, bx, by, w) {
+    const k = (ay - by) * 0.5;
+    const h = w / 2;
+    return `M${r1(ax - h)} ${r1(ay)}C${r1(ax - h)} ${r1(ay - k)} ${r1(bx - h)} ${r1(by + k)} ${r1(bx - h)} ${r1(by)}`
+      + `L${r1(bx + h)} ${r1(by)}C${r1(bx + h)} ${r1(by + k)} ${r1(ax + h)} ${r1(ay - k)} ${r1(ax + h)} ${r1(ay)}Z`;
+  }
+
+  /** S-Kurve mit senkrechten Tangenten von unten (a) nach oben (b) */
+  function riseCurve(ax, ay, bx, by) {
+    const k = (ay - by) * 0.5;
+    return `M${r1(ax)} ${r1(ay)}C${r1(ax)} ${r1(ay - k)} ${r1(bx)} ${r1(by + k)} ${r1(bx)} ${r1(by)}`;
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Flussband: Wie viele Module einer Studienrichtung führen in ein Feld?  */
+  /* ---------------------------------------------------------------------- */
+  const flowWidth = (w) => Math.min(18, 2 + w * 1.1);
+
+  function computeFlows() {
+    const weights = new Map();
+    for (const job of DATA.jobs) {
+      for (const id of job.modules) {
+        const m = modulesById.get(id);
+        if (regionsById.get(m.region).kind !== 'study') continue;
+        const key = `${m.region}>${job.region}`;
+        weights.set(key, (weights.get(key) || 0) + 1);
+      }
+    }
+    const flows = [...weights].filter(([, w]) => w >= FLOW_MIN).map(([key, w]) => {
+      const [from, to] = key.split('>');
+      return { from, to, w };
+    });
+    const center = (id) => {
+      const b = regionsById.get(id).box;
+      return b.x + b.w / 2;
+    };
+    // Bänder an den Kanten nebeneinander stapeln, sortiert nach dem Gegenüber → wenige Kreuzungen
+    const stack = (ends, key, other, edgeY) => {
+      for (const id of new Set(flows.map((f) => f[key]))) {
+        const list = flows.filter((f) => f[key] === id).sort((p, q) => center(p[other]) - center(q[other]));
+        const b = regionsById.get(id).box;
+        const total = list.reduce((s, f) => s + flowWidth(f.w), 0) + (list.length - 1) * 3;
+        let x = b.x + b.w / 2 - total / 2;
+        for (const f of list) {
+          f[ends] = [x + flowWidth(f.w) / 2, edgeY(b)];
+          x += flowWidth(f.w) + 3;
+        }
+      }
+    };
+    stack('start', 'from', 'to', (b) => b.y + 2);
+    stack('end', 'to', 'from', (b) => b.y + b.h - 2);
+    return flows;
   }
 
   /* ---------------------------------------------------------------------- */
   /* Karte aufbauen                                                          */
   /* ---------------------------------------------------------------------- */
-  function buildDefs(defs) {
-    // Weicher Neon-Schein. userSpaceOnUse, damit auch gerade Linien (Höhe 0) leuchten.
-    const blur = svgEl('filter', {
-      id: 'neon-blur', filterUnits: 'userSpaceOnUse', x: -60, y: -60, width: W + 120, height: H + 120,
-    }, defs);
-    svgEl('feGaussianBlur', { stdDeviation: 7 }, blur);
-
-    const plinthFill = svgEl('linearGradient', { id: 'plinth-fill', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
-    svgEl('stop', { offset: 0, style: 'stop-color: var(--c-fund); stop-opacity: .22' }, plinthFill);
-    svgEl('stop', { offset: 1, style: 'stop-color: var(--c-fund); stop-opacity: .03' }, plinthFill);
-
-    const dots = svgEl('pattern', { id: 'plinth-dots', width: 16, height: 16, patternUnits: 'userSpaceOnUse' }, defs);
-    svgEl('circle', { cx: 8, cy: 8, r: 1.2, style: 'fill: var(--c-fund); fill-opacity: .35' }, dots);
-
-    // Halo der "Elektronen" je Farbe
-    for (const branch of Object.keys(DATA.branches)) {
-      const halo = svgEl('radialGradient', { id: `halo-${branch}` }, defs);
-      svgEl('stop', { offset: 0, style: `stop-color: var(--c-${branch}); stop-opacity: .95` }, halo);
-      svgEl('stop', { offset: 1, style: `stop-color: var(--c-${branch}); stop-opacity: 0` }, halo);
-    }
-  }
-
   function buildMap(map) {
+    computeLayout();
     map.style.setProperty('--map-w', W);
     map.style.aspectRatio = `${W} / ${H}`;
 
-    // Zwei SVG-Ebenen: der (teure) Weichzeichner-Glow liegt auf einer eigenen
-    // Compositing-Ebene, damit die laufenden Animationen ihn nicht neu berechnen.
-    const glowSvg = svgEl('svg', { class: 'map__glow', viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true', focusable: 'false' });
-    const wireSvg = svgEl('svg', { class: 'map__wires', viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true', focusable: 'false' });
-    map.append(glowSvg, wireSvg);
+    const svg = svgEl('svg', { class: 'map__art', viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true', focusable: 'false' });
+    const defs = svgEl('defs', {}, svg);
+    const regionLayer = svgEl('g', { class: 'layer-regions' }, svg);
+    const flowLayer = svgEl('g', { class: 'layer-flows' }, svg);
+    const linkLayer = svgEl('g', { class: 'layer-links' }, svg);
+    map.append(svg);
 
-    const defs = svgEl('defs', {}, glowSvg);
-    buildDefs(defs);
-
-    const glowLayer = svgEl('g', { class: 'layer-glow', filter: 'url(#neon-blur)' }, glowSvg);
-    const decorLayer = svgEl('g', { class: 'layer-decor' }, wireSvg);
-    const linkLayer = svgEl('g', { class: 'layer-links' }, wireSvg);
-    const coreLayer = svgEl('g', { class: 'layer-core' }, wireSvg);
-    const flowLayer = svgEl('g', { class: 'layer-flow' }, wireSvg);
-    const padLayer = svgEl('g', { class: 'layer-pads' }, wireSvg);
-    const sparkLayer = svgEl('g', { class: 'layer-sparks' }, wireSvg);
-
-    const edges = [];
-    function addEdge(d, opts) {
-      const attrs = (part) => ({ d, class: `wire wire--${part} wire--${opts.kind}`, 'data-branch': opts.branch });
-      const paths = [
-        svgEl('path', attrs('glow'), glowLayer),
-        svgEl('path', attrs('core'), coreLayer),
-        svgEl('path', attrs('flow'), flowLayer),
-      ];
-      const len = Math.ceil(paths[1].getTotalLength()) + 2;
-      for (const p of paths) {
-        p.style.setProperty('--len', len);
-        p.style.setProperty('--delay', `${opts.delay}s`);
-        p.style.setProperty('--dur', `${opts.dur}s`);
-      }
-      const edge = { paths, ...opts };
-      edges.push(edge);
-      return edge;
+    /* Regionen */
+    const regionEls = new Map();
+    for (const region of DATA.regions) {
+      const g = svgEl('g', { class: `region region--${region.kind}`, 'data-c': region.id }, regionLayer);
+      g.style.setProperty('--delay', `${0.15 + (2 - region.row) * 0.3}s`);
+      svgEl('path', { class: 'region__shape', d: blobPath(region.box, region.id) }, g);
+      regionEls.set(region.id, g);
     }
 
-    const { plinth, bus, ground } = DATA.layout;
-
-    /* Sockel des Fundaments */
-    const plinthBox = { x: plinth.x, y: plinth.y, width: plinth.w, height: plinth.h, rx: 26, 'data-decor': 'fund' };
-    svgEl('rect', { class: 'plinth-glow', ...plinthBox }, glowLayer);
-    svgEl('rect', { class: 'plinth', ...plinthBox }, decorLayer);
-    svgEl('rect', { class: 'plinth-dots', ...plinthBox }, decorLayer);
-
-    /* Leiterbahn zwischen den Fundament-Knoten – hier docken die Äste an */
-    const a = nodesById.get(bus.from);
-    const b = nodesById.get(bus.to);
-    const r = 18;
-    const busEdge = addEdge(
-      `M${a.x} ${a.y}V${bus.y + r}Q${a.x} ${bus.y} ${a.x + r} ${bus.y}H${b.x - r}Q${b.x} ${bus.y} ${b.x} ${bus.y + r}V${b.y}`,
-      { kind: 'bus', branch: 'fund', delay: 0, dur: INTRO_START },
-    );
-
-    /* Grundlinie "Duales Studium" mit Stützen zum Sockel */
-    const groundEdge = addEdge(`M${ground.x1} ${ground.y}H${ground.x2}`, { kind: 'ground', branch: 'dual', delay: 0, dur: 1.2 });
-    const pillarEdges = ground.pillars.map((x) =>
-      addEdge(`M${x} ${plinth.y + plinth.h}V${ground.y}`, { kind: 'pillar', branch: 'fund', delay: 0.2, dur: 0.4 }),
-    );
-    for (const x of [ground.x1, ground.x2]) {
-      svgEl('circle', { class: 'pad', cx: x, cy: ground.y, r: 7, 'data-branch': 'dual', 'data-decor': 'dual' }, padLayer);
+    /* Flussbänder Studium → Berufsfelder und Fundament → Studium */
+    const gradient = (id, from, to, y1, y2) => {
+      const grad = svgEl('linearGradient', { id, gradientUnits: 'userSpaceOnUse', x1: 0, y1, x2: 0, y2 }, defs);
+      svgEl('stop', { offset: 0, style: `stop-color: var(--c-${from})` }, grad);
+      svgEl('stop', { offset: 1, style: `stop-color: var(--c-${to})` }, grad);
+      return `url(#${id})`;
+    };
+    const flows = computeFlows();
+    for (const f of flows) {
+      const d = riseCurve(f.start[0], f.start[1], f.end[0], f.end[1]);
+      const stroke = gradient(`flow-${f.from}-${f.to}`, f.from, f.to, f.start[1], f.end[1]);
+      f.el = svgEl('g', { class: 'flow' }, flowLayer);
+      svgEl('path', { class: 'flow__band', d: ribbon(f.start[0], f.start[1], f.end[0], f.end[1], flowWidth(f.w)), fill: stroke }, f.el);
+      svgEl('path', { class: 'flow__pulse', d }, f.el);
+      svgEl('title', {}, f.el).textContent = `${f.w} Modulbezüge`;
     }
-    const groundLabel = svgEl('text', { class: 'ground-label', x: ground.x1, y: ground.y - 40, 'data-decor': 'dual' }, decorLayer);
-    groundLabel.textContent = `${DATA.branches.dual.name.toUpperCase()} · DHBW STUTTGART`;
-
-    /* Namensschild des Fundaments */
-    const plate = svgEl('g', { class: 'nameplate', 'data-decor': 'fund' }, decorLayer);
-    const plateY = plinth.y + plinth.h;
-    svgEl('rect', { x: plinth.x + plinth.w / 2 - 95, y: plateY - 17, width: 190, height: 34, rx: 17 }, plate);
-    const plateText = svgEl('text', { x: plinth.x + plinth.w / 2, y: plateY + 1 }, plate);
-    plateText.textContent = DATA.branches.fund.name.toUpperCase();
-
-    /* Die vier Äste */
-    const edgeTo = new Map(); // Ziel-Knoten → eingehende Kante
-    const firstNodes = [];
-    const tracks = [
-      { d: `M${ground.x1} ${ground.y}H${ground.x2}`, branch: 'dual', count: 3, speed: 120, size: 2.6 },
-    ];
-    for (const [branch, def] of Object.entries(DATA.paths)) {
-      const socket = { x: def.socket[0], y: def.socket[1], id: null };
-      svgEl('circle', { class: 'pad', cx: socket.x, cy: socket.y, r: 6, 'data-branch': branch, 'data-decor': branch }, padLayer);
-      let prev = socket;
-      let full = `M${socket.x} ${socket.y}`;
-      for (const id of def.nodes) {
-        const node = nodesById.get(id);
-        const segment = curveTo(prev, node);
-        full += segment;
-        edgeTo.set(id, addEdge(`M${prev.x} ${prev.y}${segment}`, {
-          kind: 'branch', branch, from: prev.id, to: id, delay: levelDelay(node.level), dur: INTRO_STEP,
-        }));
-        prev = node;
-      }
-      firstNodes.push(def.nodes[0]);
-      tracks.push({ d: full, branch, count: 2, speed: 150, size: 3 });
+    const fund = regionsById.get('fund');
+    for (const region of DATA.regions.filter((r) => r.kind === 'study')) {
+      const x = region.box.x + region.box.w / 2;
+      const d = riseCurve(x, fund.box.y + 2, x, region.box.y + region.box.h - 2);
+      const stroke = gradient(`flow-fund-${region.id}`, 'fund', region.id, fund.box.y, region.box.y + region.box.h);
+      const el = svgEl('g', { class: 'flow' }, flowLayer);
+      svgEl('path', { class: 'flow__band', d: ribbon(x, fund.box.y + 2, x, region.box.y + region.box.h - 2, 12), fill: stroke }, el);
+      svgEl('path', { class: 'flow__pulse', d }, el);
+      flows.push({ from: 'fund', to: region.id, el });
     }
 
-    /* Querverbindungen zwischen den Ästen */
-    const links = DATA.links.map(([fromId, toId], i) => {
-      const p = nodesById.get(fromId);
-      const q = nodesById.get(toId);
-      const dx = q.x - p.x;
-      const dy = q.y - p.y;
-      const len = Math.hypot(dx, dy);
-      let nx = dy / len;
-      let ny = -dx / len;
-      if (ny > 0) { nx = -nx; ny = -ny; } // Bogen immer nach oben
-      const bend = 46;
-      const cx = (p.x + q.x) / 2 + nx * bend;
-      const cy = (p.y + q.y) / 2 + ny * bend;
-
-      const gradId = `link-grad-${i}`;
-      const grad = svgEl('linearGradient', { id: gradId, gradientUnits: 'userSpaceOnUse', x1: p.x, y1: p.y, x2: q.x, y2: q.y }, defs);
-      svgEl('stop', { offset: 0, style: `stop-color: var(--c-${p.branch})` }, grad);
-      svgEl('stop', { offset: 1, style: `stop-color: var(--c-${q.branch})` }, grad);
-
-      const path = svgEl('path', { class: 'link', d: `M${p.x} ${p.y}Q${cx} ${cy} ${q.x} ${q.y}`, stroke: `url(#${gradId})` }, linkLayer);
-      path.style.setProperty('--delay', `${INTRO_END - 0.2 + i * 0.15}s`);
-      return { path, a: fromId, b: toId };
-    });
-
-    /* Stationen als echte Buttons (Tastatur, Screenreader, Touch) */
-    const nodeLayer = document.createElement('div');
-    nodeLayer.className = 'map__nodes';
-    const nodeEls = new Map();
-    for (const n of DATA.nodes) {
+    /* Regionstitel (Buttons: Klick hebt das Feld bzw. die Studienrichtung hervor) */
+    const labelLayer = document.createElement('div');
+    labelLayer.className = 'map__labels';
+    for (const region of DATA.regions) {
+      const { x, y, w } = region.box;
       const el = document.createElement('button');
       el.type = 'button';
-      el.className = `node node--${n.size}`;
-      el.dataset.id = n.id;
-      el.dataset.branch = n.branch;
-      el.style.left = `${(n.x / W) * 100}%`;
-      el.style.top = `${(n.y / H) * 100}%`;
-      el.style.setProperty('--size', SIZES[n.size]);
-      el.style.setProperty('--delay', `${n.level === 0 ? 0.05 : levelDelay(n.level) + INTRO_STEP * 0.7}s`);
-      el.setAttribute('aria-describedby', `desc-${n.id}`);
-      const hint = n.hint ? ` ${n.hintLabel || 'Beispiel'}: ${n.hint}` : '';
-      el.innerHTML = `
-        <span class="node__disc"><img class="node__icon" src="assets/icons/${n.id}.svg" alt="" width="64" height="64" decoding="async"></span>
-        <span class="node__label">${escapeHtml(n.title)}</span>
-        <span class="sr-only" id="desc-${n.id}">${escapeHtml(n.text + hint)}</span>`;
-      nodeLayer.append(el);
-      nodeEls.set(n.id, el);
+      el.className = `region-title region-title--${region.kind}`;
+      el.dataset.c = region.id;
+      el.dataset.region = region.id;
+      el.style.left = pct(x, W);
+      el.style.top = pct(y, H);
+      el.style.width = pct(w, W);
+      el.style.setProperty('--delay', `${0.25 + (2 - region.row) * 0.3}s`);
+      el.setAttribute('aria-pressed', 'false');
+      if (region.kind === 'study' && region.sr) {
+        el.innerHTML = `<small>Studienrichtung</small><span>${escapeHtml(SR[region.sr])}</span>`;
+      } else if (region.note) {
+        el.innerHTML = `<span>${escapeHtml(region.name)}</span><small class="hand">${escapeHtml(region.note)}</small>`;
+      } else {
+        el.innerHTML = `<span>${escapeHtml(region.name)}</span>`;
+      }
+      labelLayer.append(el);
     }
-    map.append(nodeLayer);
+    map.append(labelLayer);
 
-    return { edges, edgeTo, busEdge, groundEdge, pillarEdges, firstNodes, links, nodeEls, tracks, sparkLayer };
+    /* Berufsbilder und Module als echte Buttons (Tastatur, Screenreader, Touch) */
+    const itemLayer = document.createElement('div');
+    itemLayer.className = 'map__items';
+    const itemEls = new Map();
+    const place = (el, it, region, i) => {
+      el.style.left = pct(it.x, W);
+      el.style.top = pct(it.y, H);
+      el.style.setProperty('--w', r1(it.cellW));
+      el.style.setProperty('--delay', `${0.35 + (2 - region.row) * 0.3 + i * 0.03}s`);
+      el.dataset.c = region.id;
+      el.setAttribute('aria-describedby', `desc-${it.id}`);
+      itemLayer.append(el);
+      itemEls.set(it.id, el);
+    };
+    for (const region of DATA.regions) {
+      region.items.forEach((it, i) => {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.dataset.id = it.id;
+        if (region.kind === 'field') {
+          el.className = 'job';
+          el.innerHTML = `<span class="badge">${icon(it.icon)}</span><span class="job__label">${escapeHtml(it.title)}</span>
+            <span class="sr-only" id="desc-${it.id}">${escapeHtml(`${it.text} Vorbereitung durch: ${it.modules.map((id) => plain(modulesById.get(id).title)).join(', ')}.`)}</span>`;
+        } else if (region.kind === 'fund') {
+          el.className = 'mod mod--fund';
+          el.innerHTML = `<span class="badge">${icon(it.icon)}</span><span class="mod__label">${escapeHtml(it.title)}</span>
+            <span class="sr-only" id="desc-${it.id}">${escapeHtml(it.text)}</span>`;
+        } else {
+          el.className = `mod${isUnitOnly(it) ? ' mod--wahl' : ''}`;
+          const dots = Object.keys(SR)
+            .filter((k) => it.sr[k])
+            .map((k) => `<i data-c="${k}" class="sr sr--${it.sr[k] === 'P' ? 'p' : 'w'}">${SR[k][0]}</i>`)
+            .join('');
+          el.innerHTML = `<span class="mod__label">${escapeHtml(it.title)}</span><span class="mod__sr">${dots}</span>
+            <span class="sr-only" id="desc-${it.id}">${escapeHtml(`${availability(it)}. ${it.text}`)}</span>`;
+        }
+        place(el, it, region, i);
+      });
+    }
+    map.append(itemLayer);
+
+    return { svg, linkLayer, regionEls, flows, itemEls, labelLayer };
+  }
+
+  /** "Automation: Pflicht · Elektronik: Wahl" */
+  function availability(m) {
+    if (m.unit) return 'In allen Studienrichtungen wählbar';
+    const all = Object.keys(SR).every((k) => m.sr[k] === 'P');
+    if (all) return 'Pflicht in allen Studienrichtungen';
+    return Object.keys(SR)
+      .filter((k) => m.sr[k])
+      .map((k) => `${SR[k]}: ${m.sr[k] === 'P' ? 'Pflicht' : 'Wahl'}`)
+      .join(' · ');
   }
 
   /* ---------------------------------------------------------------------- */
-  /* Hervorhebung: Pfad vom Fundament bis zur Station leuchtet auf          */
+  /* Hervorhebung: Verbindungen Modul ↔ Berufsbild                          */
   /* ---------------------------------------------------------------------- */
   function createHighlighter(map, parts) {
-    const fundNodes = branchNodes('fund');
-    const decor = map.querySelectorAll('[data-decor]');
+    const { linkLayer, itemEls, regionEls, flows, labelLayer } = parts;
 
-    function apply(litNodes, litEdges, litLinks) {
+    function anchor(it, top) {
+      const region = regionsById.get(it.region);
+      if (region.kind === 'field') return [it.x, it.y + (top ? -28 : 28)];
+      if (region.kind === 'fund') return [it.x, it.y - 26];
+      return [it.x, it.y - 13];
+    }
+
+    function drawLinks(pairs) {
+      linkLayer.replaceChildren();
+      pairs.forEach(([m, job], i) => {
+        const [sx, sy] = anchor(m, true);
+        const [ex, ey] = anchor(job, false);
+        const path = svgEl('path', { class: 'link', d: riseCurve(sx, sy, ex, ey), 'data-c': job.region }, linkLayer);
+        const len = Math.ceil(path.getTotalLength()) + 2;
+        path.style.setProperty('--len', len);
+        path.style.setProperty('--delay', `${Math.min(i * 0.035, 0.5)}s`);
+      });
+      // Startzustand erst berechnen lassen, dann zeichnen – sonst gibt es keinen Übergang
+      void linkLayer.getBoundingClientRect();
+      linkLayer.classList.add('is-drawn');
+    }
+
+    function apply({ items = [], strong = [], regions = [], pairs = [], flowsLit = () => false }) {
+      const lit = new Set(items);
+      const strongSet = new Set(strong);
       map.classList.add('is-focused');
-      for (const [id, el] of parts.nodeEls) el.classList.toggle('is-lit', litNodes.has(id));
-      for (const e of parts.edges) for (const p of e.paths) p.classList.toggle('is-lit', litEdges.has(e));
-      for (const l of parts.links) l.path.classList.toggle('is-lit', litLinks.has(l));
-      // Sockel, Beschriftungen und Lötpunkte leuchten mit, wenn ihr Ast beteiligt ist
-      const litBranches = new Set([...litNodes].map((id) => nodesById.get(id).branch));
-      for (const el of decor) el.classList.toggle('is-lit', litBranches.has(el.dataset.decor));
+      for (const [id, el] of itemEls) {
+        el.classList.toggle('is-lit', lit.has(id));
+        el.classList.toggle('is-strong', strongSet.has(id));
+      }
+      const regionSet = new Set(regions);
+      for (const [id, el] of regionEls) el.classList.toggle('is-lit', regionSet.has(id));
+      for (const el of labelLayer.children) el.classList.toggle('is-lit', regionSet.has(el.dataset.region));
+      for (const f of flows) f.el.classList.toggle('is-lit', flowsLit(f));
+      linkLayer.classList.remove('is-drawn');
+      drawLinks(pairs);
     }
 
     function clear() {
       map.classList.remove('is-focused');
-      map.querySelectorAll('.is-lit').forEach((el) => el.classList.remove('is-lit'));
+      map.querySelectorAll('.is-lit, .is-strong').forEach((el) => el.classList.remove('is-lit', 'is-strong'));
+      linkLayer.replaceChildren();
     }
 
-    function forNode(id) {
-      const node = nodesById.get(id);
-      const litNodes = new Set([id]);
-      const litEdges = new Set();
-      const litLinks = new Set();
+    function forJob(id) {
+      const job = jobsById.get(id);
+      const mods = job.modules.map((m) => modulesById.get(m));
+      const regions = new Set([job.region, ...mods.map((m) => m.region)]);
+      apply({
+        items: [id, ...job.modules],
+        strong: [id],
+        regions: [...regions],
+        pairs: mods.map((m) => [m, job]),
+        flowsLit: (f) => f.to === job.region && mods.some((m) => m.region === f.from),
+      });
+    }
 
-      if (node.branch === 'dual') {
-        litEdges.add(parts.groundEdge);
-        parts.pillarEdges.forEach((e) => litEdges.add(e));
-      } else if (node.branch === 'fund') {
-        fundNodes.forEach((n) => litNodes.add(n));
-        parts.firstNodes.forEach((n) => { litNodes.add(n); litEdges.add(parts.edgeTo.get(n)); });
-        litEdges.add(parts.busEdge);
+    function forModule(id) {
+      const mod = modulesById.get(id);
+      const jobs = jobsByModule.get(id);
+      apply({
+        items: [id, ...jobs.map((j) => j.id)],
+        strong: [id],
+        regions: [mod.region, ...jobs.map((j) => j.region)],
+        pairs: jobs.map((j) => [mod, j]),
+        flowsLit: (f) => f.from === mod.region && jobs.some((j) => j.region === f.to),
+      });
+    }
+
+    function forRegion(id) {
+      const region = regionsById.get(id);
+      if (region.kind === 'field') {
+        const pairs = region.items.flatMap((job) => job.modules.map((m) => [modulesById.get(m), job]));
+        apply({
+          items: [...region.items.map((j) => j.id), ...pairs.map(([m]) => m.id)],
+          regions: [id, ...new Set(pairs.map(([m]) => m.region))],
+          pairs,
+          flowsLit: (f) => f.to === id,
+        });
       } else {
-        for (let cur = id; parts.edgeTo.has(cur);) {
-          const edge = parts.edgeTo.get(cur);
-          litEdges.add(edge);
-          if (!edge.from) break;
-          litNodes.add(edge.from);
-          cur = edge.from;
-        }
-        fundNodes.forEach((n) => litNodes.add(n));
-        litEdges.add(parts.busEdge);
-        for (const l of parts.links) {
-          if (l.a === id || l.b === id) { litLinks.add(l); litNodes.add(l.a); litNodes.add(l.b); }
-        }
+        const jobs = new Set(region.items.flatMap((m) => jobsByModule.get(m.id)));
+        apply({
+          items: [...region.items.map((m) => m.id), ...[...jobs].map((j) => j.id)],
+          regions: [id, ...[...jobs].map((j) => j.region)],
+          flowsLit: (f) => f.from === id,
+        });
       }
-      apply(litNodes, litEdges, litLinks);
     }
 
-    function forBranch(branch) {
-      const litNodes = new Set(branchNodes(branch));
-      const litEdges = new Set(parts.edges.filter((e) => e.branch === branch));
-      const litLinks = new Set();
-      if (branch === 'dual' || branch === 'fund') {
-        parts.pillarEdges.forEach((e) => litEdges.add(e));
-      }
-      if (branch !== 'dual') {
-        fundNodes.forEach((n) => litNodes.add(n));
-        litEdges.add(parts.busEdge);
-      }
-      apply(litNodes, litEdges, litLinks);
+    /** Studienrichtung: angebotene Module + Berufsbilder, die dazu passen */
+    function forStudienrichtung(sr) {
+      const mods = DATA.modules.filter((m) => m.sr[sr]);
+      const jobs = DATA.jobs.filter((j) => fit(j, sr) >= FIT_THRESHOLD);
+      apply({
+        items: [...mods.map((m) => m.id), ...jobs.map((j) => j.id)],
+        strong: [...mods.filter((m) => m.sr[sr] === 'P').map((m) => m.id), ...jobs.filter((j) => fit(j, sr) >= FIT_STRONG).map((j) => j.id)],
+        regions: [sr, 'fund', ...new Set(jobs.map((j) => j.region))],
+        flowsLit: (f) => f.from === sr || f.to === sr,
+      });
     }
 
-    return { forNode, forBranch, clear };
+    return { forJob, forModule, forRegion, forStudienrichtung, clear };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -324,90 +503,115 @@
   function createTooltip(map) {
     const tip = document.createElement('div');
     tip.className = 'tooltip';
-    tip.setAttribute('aria-hidden', 'true'); // Inhalt steht Screenreadern per aria-describedby zur Verfügung
-    tip.innerHTML = `
-      <span class="tooltip__tag"></span>
-      <strong class="tooltip__title"></strong>
-      <p class="tooltip__text"></p>
-      <p class="tooltip__hint"><b></b> <span></span></p>`;
+    tip.setAttribute('aria-hidden', 'true'); // Inhalte stehen Screenreadern per aria-describedby zur Verfügung
     map.append(tip);
-    const tag = tip.querySelector('.tooltip__tag');
-    const title = tip.querySelector('.tooltip__title');
-    const text = tip.querySelector('.tooltip__text');
-    const hint = tip.querySelector('.tooltip__hint');
     const scroller = map.parentElement;
     const topbar = document.querySelector('.topbar');
 
+    const chip = (m) => {
+      const region = regionsById.get(m.region);
+      const where = region.kind === 'fund' ? 'Fundament' : region.sr ? SR[region.sr] : 'Wahl';
+      return `<li data-c="${m.region}"><span>${escapeHtml(m.title)}</span><em>${where}</em></li>`;
+    };
+
+    function jobHtml(job) {
+      const mods = job.modules.map((id) => modulesById.get(id));
+      const order = (m) => (m.region === 'fund' ? 2 : m.region === 'wahl' ? 1 : 0);
+      mods.sort((a, b) => order(a) - order(b));
+      const fits = Object.keys(SR).filter((k) => fit(job, k) >= FIT_THRESHOLD).map((k) => SR[k]);
+      return `
+        <span class="tooltip__tag">${escapeHtml(regionsById.get(job.region).name)}</span>
+        <strong class="tooltip__title">${escapeHtml(job.title)}</strong>
+        <p class="tooltip__text">${escapeHtml(job.text)}</p>
+        <p class="tooltip__hint"><b>Warum jetzt:</b> ${escapeHtml(job.hint)}</p>
+        <p class="tooltip__sub">Das bringt dich hin</p>
+        <ul class="tooltip__chips">${mods.map(chip).join('')}</ul>
+        ${fits.length ? `<p class="tooltip__fit">Passt besonders zu: ${fits.join(', ')}</p>` : ''}`;
+    }
+
+    function moduleHtml(m) {
+      const region = regionsById.get(m.region);
+      const jobs = jobsByModule.get(m.id);
+      const meta = m.unit
+        ? `Wahlunit im Modul „Ausgewählte Themen der Elektro- und Informationstechnik“ (${m.codes[0]}) · ${m.year} Studienjahr`
+        : `${m.codes.join(', ')} · ${m.year} Studienjahr`;
+      return `
+        <span class="tooltip__tag">${escapeHtml(region.kind === 'fund' ? 'Fundament' : region.sr ? `Studienrichtung ${SR[region.sr]}` : region.name)}</span>
+        <strong class="tooltip__title">${escapeHtml(m.title)}</strong>
+        <p class="tooltip__meta">${escapeHtml(meta)}<br>${escapeHtml(availability(m))}</p>
+        <p class="tooltip__text">${escapeHtml(m.text)}</p>
+        <p class="tooltip__sub">Führt zu ${jobs.length} Berufsbild${jobs.length === 1 ? '' : 'ern'}</p>
+        <ul class="tooltip__chips">${jobs.map((j) => `<li data-c="${j.region}"><span>${escapeHtml(j.title)}</span></li>`).join('')}</ul>`;
+    }
+
     function position(anchor) {
       const mapBox = map.getBoundingClientRect();
-      const viewBox = scroller.getBoundingClientRect();
-      const disc = anchor.querySelector('.node__disc').getBoundingClientRect();
+      const view = scroller.getBoundingClientRect();
+      const target = (anchor.querySelector('.badge') || anchor).getBoundingClientRect();
       const tw = tip.offsetWidth;
       const th = tip.offsetHeight;
-      const gap = 14;
-      // sichtbarer Bereich = Karte ∩ Scroll-Container ∩ Fenster
-      const minX = Math.max(mapBox.left, viewBox.left, 0) + 8;
-      const maxX = Math.min(mapBox.right, viewBox.right, window.innerWidth) - 8;
-      const cx = disc.left + disc.width / 2;
+      const gap = 12;
+      const minX = Math.max(mapBox.left, view.left, 0) + 8;
+      const maxX = Math.min(mapBox.right, view.right, window.innerWidth) - 8;
+      const cx = target.left + target.width / 2;
       const x = Math.max(minX, Math.min(cx - tw / 2, maxX - tw));
-      // oben nur, wenn dort Platz ist (nicht unter der Kopfzeile, nicht außerhalb der Karte)
-      const minY = Math.max(viewBox.top, (topbar?.offsetHeight ?? 0) + 8);
-      const below = disc.top - th - gap < minY;
-      const label = anchor.querySelector('.node__label').getBoundingClientRect();
-      const y = below ? label.bottom + gap : disc.top - th - gap;
-
+      const minY = Math.max(view.top, (topbar?.offsetHeight ?? 0) + 8);
+      const below = target.top - th - gap < minY;
+      const bottomEdge = anchor.getBoundingClientRect().bottom;
+      const y = below ? bottomEdge + gap : target.top - th - gap;
       tip.dataset.placement = below ? 'bottom' : 'top';
       tip.style.left = `${x - mapBox.left}px`;
       tip.style.top = `${y - mapBox.top}px`;
-      tip.style.setProperty('--arrow-x', `${Math.max(16, Math.min(cx - x, tw - 16))}px`);
+      tip.style.setProperty('--arrow-x', `${Math.max(18, Math.min(cx - x, tw - 18))}px`);
     }
 
-    function show(node, anchor) {
-      tip.dataset.branch = node.branch;
-      tag.textContent = node.size === 'crown' ? 'Zukunftsfeld' : DATA.branches[node.branch].name;
-      title.textContent = node.title;
-      text.textContent = node.text;
-      hint.hidden = !node.hint;
-      hint.querySelector('b').textContent = `${node.hintLabel || 'Beispiel'}:`;
-      hint.querySelector('span').textContent = node.hint || '';
+    function show(id, anchor) {
+      const job = jobsById.get(id);
+      const item = job || modulesById.get(id);
+      tip.dataset.c = item.region;
+      tip.innerHTML = job ? jobHtml(job) : moduleHtml(item);
       position(anchor);
       tip.classList.add('is-visible');
     }
 
     const hide = () => tip.classList.remove('is-visible');
-
     return { show, hide, position };
   }
 
   /* ---------------------------------------------------------------------- */
-  /* Interaktion: Hover, Fokus, Tippen, Legende                             */
+  /* Interaktion                                                             */
   /* ---------------------------------------------------------------------- */
   function initInteractions(map, parts, tooltip, highlighter) {
-    let active = null; // id der offenen Station
+    let active = null; // geöffneter Eintrag
     let pinned = false; // per Klick/Tippen festgehalten
-    let branchPin = null; // per Legende gewählter Ast
-    const chips = [...document.querySelectorAll('[data-branch-chip]')];
+    let filter = null; // { type: 'sr' | 'region', id }
+    const filterButtons = [...document.querySelectorAll('[data-sr-filter]'), ...parts.labelLayer.children];
 
-    const restore = () => (branchPin ? highlighter.forBranch(branchPin) : highlighter.clear());
+    const restoreFilter = () => {
+      if (!filter) highlighter.clear();
+      else if (filter.type === 'sr') highlighter.forStudienrichtung(filter.id);
+      else highlighter.forRegion(filter.id);
+    };
 
     function open(id) {
-      if (active && active !== id) parts.nodeEls.get(active).classList.remove('is-active');
+      if (active && active !== id) parts.itemEls.get(active).classList.remove('is-active');
       active = id;
-      const el = parts.nodeEls.get(id);
+      const el = parts.itemEls.get(id);
       el.classList.add('is-active');
-      tooltip.show(nodesById.get(id), el);
-      highlighter.forNode(id);
+      if (jobsById.has(id)) highlighter.forJob(id);
+      else highlighter.forModule(id);
+      tooltip.show(id, el);
     }
 
     function close() {
-      if (active) parts.nodeEls.get(active).classList.remove('is-active');
+      if (active) parts.itemEls.get(active).classList.remove('is-active');
       active = null;
       pinned = false;
       tooltip.hide();
-      restore();
+      restoreFilter();
     }
 
-    for (const [id, el] of parts.nodeEls) {
+    for (const [id, el] of parts.itemEls) {
       el.addEventListener('pointerenter', (e) => {
         if (e.pointerType !== 'touch' && !pinned) open(id);
       });
@@ -428,99 +632,104 @@
     }
 
     document.addEventListener('click', (e) => {
-      if (active && !e.target.closest('.node')) close();
+      if (active && !e.target.closest('.job, .mod')) close();
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && active) close();
     });
-    const reposition = () => active && tooltip.position(parts.nodeEls.get(active));
+    const reposition = () => active && tooltip.position(parts.itemEls.get(active));
     window.addEventListener('resize', reposition);
     map.parentElement.addEventListener('scroll', reposition, { passive: true });
 
-    /* Legende: Hover = Vorschau, Klick = Ast festhalten */
-    for (const chip of chips) {
-      const branch = chip.dataset.branchChip;
-      chip.addEventListener('pointerenter', (e) => {
-        if (e.pointerType !== 'touch' && !active) highlighter.forBranch(branch);
-      });
-      chip.addEventListener('pointerleave', (e) => {
-        if (e.pointerType !== 'touch' && !active) restore();
-      });
-      chip.addEventListener('click', () => {
-        branchPin = branchPin === branch ? null : branch;
-        chips.forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.branchChip === branchPin)));
-        if (!active) restore();
-      });
-    }
-  }
-
-  /* ---------------------------------------------------------------------- */
-  /* "Elektronen", die vom Fundament die Äste hinauflaufen                  */
-  /* ---------------------------------------------------------------------- */
-  function createSparks(layer, tracks) {
-    const items = [];
-    for (const t of tracks) {
-      const path = svgEl('path', { class: 'track', d: t.d }, layer);
-      const len = path.getTotalLength();
-      for (let i = 0; i < t.count; i++) {
-        const g = svgEl('g', { class: 'spark' }, layer);
-        svgEl('circle', { r: t.size * 4, fill: `url(#halo-${t.branch})` }, g);
-        svgEl('circle', { r: t.size, class: 'spark__core' }, g);
-        items.push({ g, path, len, pos: (i / t.count) * len, speed: t.speed * (0.85 + Math.random() * 0.3) });
+    /* Filter: Studienrichtung (Legende) oder Region (Regionstitel) */
+    function setFilter(next) {
+      filter = next && filter && next.type === filter.type && next.id === filter.id ? null : next;
+      for (const b of filterButtons) {
+        const on = filter && ((b.dataset.srFilter && filter.type === 'sr' && b.dataset.srFilter === filter.id)
+          || (b.dataset.region && filter.type === 'region' && b.dataset.region === filter.id));
+        b.setAttribute('aria-pressed', String(Boolean(on)));
       }
+      if (active) close();
+      else restoreFilter();
+    }
+    for (const b of filterButtons) {
+      const next = b.dataset.srFilter ? { type: 'sr', id: b.dataset.srFilter } : { type: 'region', id: b.dataset.region };
+      b.addEventListener('click', () => setFilter(next));
+      b.addEventListener('pointerenter', (e) => {
+        if (e.pointerType === 'touch' || active || filter) return;
+        if (next.type === 'sr') highlighter.forStudienrichtung(next.id);
+        else highlighter.forRegion(next.id);
+      });
+      b.addEventListener('pointerleave', (e) => {
+        if (e.pointerType !== 'touch' && !active) restoreFilter();
+      });
     }
 
-    let raf = 0;
-    let last = 0;
-    function frame(now) {
-      const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
-      last = now;
-      for (const s of items) {
-        s.pos = (s.pos + s.speed * dt) % s.len;
-        const p = s.path.getPointAtLength(s.pos);
-        s.g.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
-        s.g.style.opacity = Math.min(1, s.pos / 40, (s.len - s.pos) / 40).toFixed(2);
-      }
-      raf = requestAnimationFrame(frame);
-    }
-
+    /** Von außen (Berufsbild-Karten): Eintrag auf der Karte zeigen */
     return {
-      start() {
-        if (raf) return;
-        last = 0;
-        layer.classList.add('is-running');
-        raf = requestAnimationFrame(frame);
-      },
-      stop() {
-        cancelAnimationFrame(raf);
-        raf = 0;
+      reveal(id) {
+        const el = parts.itemEls.get(id);
+        if (!el) return;
+        if (filter) setFilter(filter); // Filter aufheben
+        map.closest('section')?.scrollIntoView({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'start' });
+        const scroller = map.parentElement;
+        scroller.scrollLeft = el.offsetLeft - scroller.clientWidth / 2;
+        setTimeout(() => {
+          el.focus({ preventScroll: true });
+          open(id);
+          pinned = true;
+        }, reducedMotion.matches ? 0 : 450);
       },
     };
   }
 
   /* ---------------------------------------------------------------------- */
-  /* Aufbau-Animation starten, sobald die Karte sichtbar wird               */
+  /* Berufsbilder als Karten (übersichtlich auf dem Smartphone)             */
   /* ---------------------------------------------------------------------- */
-  function initReveal(map, sparks) {
+  function buildJobCards(container, api) {
+    const fields = DATA.regions.filter((r) => r.kind === 'field');
+    container.innerHTML = fields.map((field) => `
+      <section class="field" data-c="${field.id}" aria-labelledby="field-${field.id}">
+        <h3 id="field-${field.id}">${escapeHtml(field.name)}</h3>
+        <div class="cards">
+          ${DATA.jobs.filter((j) => j.region === field.id).map((job) => {
+            const own = job.modules.map((id) => modulesById.get(id)).filter((m) => m.region !== 'fund');
+            const base = job.modules.length - own.length;
+            return `
+            <article class="card">
+              <span class="badge">${icon(job.icon)}</span>
+              <h4>${escapeHtml(job.title)}</h4>
+              <p>${escapeHtml(job.text)}</p>
+              <p class="card__hint">${escapeHtml(job.hint)}</p>
+              <ul class="card__mods" aria-label="Module">
+                ${own.map((m) => `<li data-c="${m.region}">${escapeHtml(m.title)}</li>`).join('')}
+                ${base ? `<li data-c="fund">+ ${base} Grundlagen</li>` : ''}
+              </ul>
+              <button class="card__show" type="button" data-show="${job.id}">Auf der Map zeigen</button>
+            </article>`;
+          }).join('')}
+        </div>
+      </section>`).join('');
+    container.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-show]');
+      if (button) api.reveal(button.dataset.show);
+    });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Aufbau-Animation, sobald die Karte sichtbar wird                       */
+  /* ---------------------------------------------------------------------- */
+  function initReveal(map) {
     if (reducedMotion.matches || !('IntersectionObserver' in window)) {
       map.classList.add('is-visible');
       return;
     }
-    let introDone = false;
-    let visible = false;
     const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      if (!visible) { sparks.stop(); return; }
-      if (!map.classList.contains('is-visible')) {
+      if (entry.isIntersecting) {
         map.classList.add('is-visible');
-        setTimeout(() => {
-          introDone = true;
-          if (visible) sparks.start();
-        }, INTRO_END * 1000);
-      } else if (introDone) {
-        sparks.start();
+        observer.disconnect();
       }
-    }, { threshold: 0.12 });
+    }, { threshold: 0.1 });
     observer.observe(map);
   }
 
@@ -536,6 +745,10 @@
   /* ---------------------------------------------------------------------- */
   initTheme();
   document.querySelectorAll('[data-year]').forEach((el) => { el.textContent = new Date().getFullYear(); });
+  document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = icon(el.dataset.icon); });
+  document.querySelectorAll('[data-count]').forEach((el) => {
+    el.textContent = { jobs: DATA.jobs.length, modules: DATA.modules.length }[el.dataset.count] ?? '';
+  });
 
   const map = document.getElementById('eit-map');
   if (!map || !DATA) return;
@@ -543,7 +756,9 @@
   const parts = buildMap(map);
   const tooltip = createTooltip(map);
   const highlighter = createHighlighter(map, parts);
-  initInteractions(map, parts, tooltip, highlighter);
-  initReveal(map, createSparks(parts.sparkLayer, parts.tracks));
+  const api = initInteractions(map, parts, tooltip, highlighter);
+  const cards = document.getElementById('berufe-liste');
+  if (cards) buildJobCards(cards, api);
+  initReveal(map);
   centerScroller(map.parentElement);
 })();

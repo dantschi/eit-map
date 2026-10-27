@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128">
-<defs>
-<filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2"/></filter>
-<g id="shape" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20L32 14M12 20L32 26M12 20L32 38M12 20L32 50M12 32L32 14M12 32L32 26M12 32L32 38M12 32L32 50M12 44L32 14M12 44L32 26M12 44L32 38M12 44L32 50M32 14L52 26M32 14L52 38M32 26L52 26M32 26L52 38M32 38L52 26M32 38L52 38M32 50L52 26M32 50L52 38" stroke-width="1.6"/><circle cx="12" cy="20" r="4.2" fill="#0a0e22"/><circle cx="12" cy="32" r="4.2" fill="#0a0e22"/><circle cx="12" cy="44" r="4.2" fill="#0a0e22"/><circle cx="32" cy="14" r="4.2" fill="#0a0e22"/><circle cx="32" cy="26" r="4.2" fill="#0a0e22"/><circle cx="32" cy="38" r="4.2" fill="#0a0e22"/><circle cx="32" cy="50" r="4.2" fill="#0a0e22"/><circle cx="52" cy="26" r="4.2" fill="#0a0e22"/><circle cx="52" cy="38" r="4.2" fill="#0a0e22"/></g>
-</defs>
-<use href="#shape" stroke="#ff3df0" stroke-width="5" opacity=".55" filter="url(#glow)"/>
-<use href="#shape" stroke="#ff3df0" stroke-width="2.8"/>
-<use href="#shape" stroke="#ffb1f9" stroke-width="1.1"/>
-</svg>

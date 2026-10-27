@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128">
-<defs>
-<filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2"/></filter>
-<g id="shape" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="32" height="32" rx="3"/><path d="M24 16V8M32 16V8M40 16V8M24 56v-8M32 56v-8M40 56v-8M16 24H8M16 32H8M16 40H8M56 24h-8M56 32h-8M56 40h-8"/><path d="M26 25h5a7 7 0 0 1 0 14h-5z"/><path d="M21 29h5M21 35h5M38 32h5"/></g>
-</defs>
-<use href="#shape" stroke="#00e5ff" stroke-width="5" opacity=".55" filter="url(#glow)"/>
-<use href="#shape" stroke="#00e5ff" stroke-width="2.8"/>
-<use href="#shape" stroke="#99f5ff" stroke-width="1.1"/>
-</svg>
