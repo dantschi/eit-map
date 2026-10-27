@@ -51,18 +51,6 @@
   const r1 = (v) => Math.round(v * 10) / 10;
   const pct = (v, total) => `${(v / total) * 100}%`;
 
-  /** Deterministischer Zufall, damit die Karte bei jedem Laden gleich aussieht */
-  function seeded(str) {
-    let h = 2166136261;
-    for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-    return () => {
-      h = Math.imul(h ^ (h >>> 15), 2246822507);
-      h = Math.imul(h ^ (h >>> 13), 3266489909);
-      h ^= h >>> 16;
-      return (h >>> 0) / 4294967296;
-    };
-  }
-
   const isUnitOnly = (m) => Object.values(m.sr).every((k) => k === 'W');
 
   /** Wie gut passt ein Berufsbild zu einer Studienrichtung? (0 … 1, Fundament zählt nicht) */
@@ -86,7 +74,7 @@
     const apply = (theme) => {
       root.dataset.theme = theme;
       button?.setAttribute('aria-label', theme === 'dark' ? 'Helles Design aktivieren' : 'Dunkles Design aktivieren');
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0f1f' : '#f6f1e7');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#1c1c1c' : '#3c3c3c');
     };
     apply(root.dataset.theme || (systemDark.matches ? 'dark' : 'light'));
     button?.addEventListener('click', () => {
@@ -132,72 +120,13 @@
     const cw = (w - 2 * padX) / cols;
     const ch = (y + h - 10 - top) / rows;
     region.items.forEach((it, i) => {
-      const rnd = seeded(it.id);
       const col = i % cols;
       const row = Math.floor(i / cols);
-      let cx = x + padX + cw * (col + 0.5);
+      const cx = x + padX + cw * (col + 0.5);
       let cy = top + ch * (row + 0.5);
-      if (region.kind === 'field') {
-        cx += (row % 2 ? 1 : -1) * w * 0.045 + (rnd() - 0.5) * 6; // leichter Zickzack wie auf einem Wanderweg
-        cy -= 20; // Abzeichen oben, Beschriftung darunter
-      } else if (region.kind === 'fund') {
-        cy += -16 + (rnd() - 0.5) * 10;
-      } else {
-        cx += (rnd() - 0.5) * cw * 0.1;
-        cy += (rnd() - 0.5) * ch * 0.14;
-      }
+      if (region.kind !== 'study') cy -= region.kind === 'field' ? 20 : 16; // Abzeichen oben, Beschriftung darunter
       Object.assign(it, { x: cx, y: cy, cellW: cw });
     });
-  }
-
-  /* ---------------------------------------------------------------------- */
-  /* Organische Regionen ("Länder") wie auf einer gezeichneten Karte        */
-  /* ---------------------------------------------------------------------- */
-  function roundedRectPoint(b, r, t) {
-    const straightW = b.w - 2 * r;
-    const straightH = b.h - 2 * r;
-    const quarter = (Math.PI * r) / 2;
-    const segments = [straightW, quarter, straightH, quarter, straightW, quarter, straightH, quarter];
-    let i = 0;
-    while (i < 7 && t > segments[i]) t -= segments[i++];
-    const arc = (cx, cy, a0) => {
-      const a = a0 + t / r;
-      return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a), nx: Math.cos(a), ny: Math.sin(a) };
-    };
-    switch (i) {
-      case 0: return { x: b.x + r + t, y: b.y, nx: 0, ny: -1 };
-      case 1: return arc(b.x + b.w - r, b.y + r, -Math.PI / 2);
-      case 2: return { x: b.x + b.w, y: b.y + r + t, nx: 1, ny: 0 };
-      case 3: return arc(b.x + b.w - r, b.y + b.h - r, 0);
-      case 4: return { x: b.x + b.w - r - t, y: b.y + b.h, nx: 0, ny: 1 };
-      case 5: return arc(b.x + r, b.y + b.h - r, Math.PI / 2);
-      case 6: return { x: b.x, y: b.y + b.h - r - t, nx: -1, ny: 0 };
-      default: return arc(b.x + r, b.y + r, Math.PI);
-    }
-  }
-
-  function blobPath(box, seed, wobble = 5) {
-    const rnd = seeded(seed);
-    const r = Math.min(34, box.w / 4, box.h / 4);
-    const perimeter = 2 * (box.w + box.h) - 8 * r + 2 * Math.PI * r;
-    const n = Math.max(14, Math.round(perimeter / 70));
-    const pts = [];
-    for (let i = 0; i < n; i++) {
-      const p = roundedRectPoint(box, r, ((i + rnd() * 0.3) / n) * perimeter);
-      const off = (rnd() - 0.5) * 2 * wobble;
-      pts.push([p.x + p.nx * off, p.y + p.ny * off]);
-    }
-    // geschlossene Catmull-Rom-Kurve → kubische Béziers
-    let d = `M${r1(pts[0][0])} ${r1(pts[0][1])}`;
-    for (let i = 0; i < n; i++) {
-      const p0 = pts[(i - 1 + n) % n];
-      const p1 = pts[i];
-      const p2 = pts[(i + 1) % n];
-      const p3 = pts[(i + 2) % n];
-      d += `C${r1(p1[0] + (p2[0] - p0[0]) / 6)} ${r1(p1[1] + (p2[1] - p0[1]) / 6)} `
-        + `${r1(p2[0] - (p3[0] - p1[0]) / 6)} ${r1(p2[1] - (p3[1] - p1[1]) / 6)} ${r1(p2[0])} ${r1(p2[1])}`;
-    }
-    return `${d}Z`;
   }
 
   /** Sankey-Band: gefüllte Fläche zwischen zwei S-Kurven der Breite w */
@@ -250,8 +179,8 @@
         }
       }
     };
-    stack('start', 'from', 'to', (b) => b.y + 2);
-    stack('end', 'to', 'from', (b) => b.y + b.h - 2);
+    stack('start', 'from', 'to', (b) => b.y);
+    stack('end', 'to', 'from', (b) => b.y + b.h);
     return flows;
   }
 
@@ -264,44 +193,37 @@
     map.style.aspectRatio = `${W} / ${H}`;
 
     const svg = svgEl('svg', { class: 'map__art', viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true', focusable: 'false' });
-    const defs = svgEl('defs', {}, svg);
     const regionLayer = svgEl('g', { class: 'layer-regions' }, svg);
     const flowLayer = svgEl('g', { class: 'layer-flows' }, svg);
     const linkLayer = svgEl('g', { class: 'layer-links' }, svg);
     map.append(svg);
 
-    /* Regionen */
+    /* Regionen: klare Rechtecke, Berufsfelder mit roter Kopflinie */
     const regionEls = new Map();
     for (const region of DATA.regions) {
+      const { x, y, w, h } = region.box;
       const g = svgEl('g', { class: `region region--${region.kind}`, 'data-c': region.id }, regionLayer);
       g.style.setProperty('--delay', `${0.15 + (2 - region.row) * 0.3}s`);
-      svgEl('path', { class: 'region__shape', d: blobPath(region.box, region.id) }, g);
+      svgEl('rect', { class: 'region__shape', x, y, width: w, height: h }, g);
+      if (region.kind === 'field') svgEl('rect', { class: 'region__rule', x, y, width: w, height: 5 }, g);
       regionEls.set(region.id, g);
     }
 
     /* Flussbänder Studium → Berufsfelder und Fundament → Studium */
-    const gradient = (id, from, to, y1, y2) => {
-      const grad = svgEl('linearGradient', { id, gradientUnits: 'userSpaceOnUse', x1: 0, y1, x2: 0, y2 }, defs);
-      svgEl('stop', { offset: 0, style: `stop-color: var(--c-${from})` }, grad);
-      svgEl('stop', { offset: 1, style: `stop-color: var(--c-${to})` }, grad);
-      return `url(#${id})`;
-    };
     const flows = computeFlows();
     for (const f of flows) {
       const d = riseCurve(f.start[0], f.start[1], f.end[0], f.end[1]);
-      const stroke = gradient(`flow-${f.from}-${f.to}`, f.from, f.to, f.start[1], f.end[1]);
       f.el = svgEl('g', { class: 'flow' }, flowLayer);
-      svgEl('path', { class: 'flow__band', d: ribbon(f.start[0], f.start[1], f.end[0], f.end[1], flowWidth(f.w)), fill: stroke }, f.el);
+      svgEl('path', { class: 'flow__band', d: ribbon(f.start[0], f.start[1], f.end[0], f.end[1], flowWidth(f.w)) }, f.el);
       svgEl('path', { class: 'flow__pulse', d }, f.el);
       svgEl('title', {}, f.el).textContent = `${f.w} Modulbezüge`;
     }
     const fund = regionsById.get('fund');
     for (const region of DATA.regions.filter((r) => r.kind === 'study')) {
       const x = region.box.x + region.box.w / 2;
-      const d = riseCurve(x, fund.box.y + 2, x, region.box.y + region.box.h - 2);
-      const stroke = gradient(`flow-fund-${region.id}`, 'fund', region.id, fund.box.y, region.box.y + region.box.h);
+      const d = riseCurve(x, fund.box.y, x, region.box.y + region.box.h);
       const el = svgEl('g', { class: 'flow' }, flowLayer);
-      svgEl('path', { class: 'flow__band', d: ribbon(x, fund.box.y + 2, x, region.box.y + region.box.h - 2, 12), fill: stroke }, el);
+      svgEl('path', { class: 'flow__band', d: ribbon(x, fund.box.y, x, region.box.y + region.box.h, 12) }, el);
       svgEl('path', { class: 'flow__pulse', d }, el);
       flows.push({ from: 'fund', to: region.id, el });
     }
@@ -324,7 +246,7 @@
       if (region.kind === 'study' && region.sr) {
         el.innerHTML = `<small>Studienrichtung</small><span>${escapeHtml(SR[region.sr])}</span>`;
       } else if (region.note) {
-        el.innerHTML = `<span>${escapeHtml(region.name)}</span><small class="hand">${escapeHtml(region.note)}</small>`;
+        el.innerHTML = `<span>${escapeHtml(region.name)}</span><small>${escapeHtml(region.note)}</small>`;
       } else {
         el.innerHTML = `<span>${escapeHtml(region.name)}</span>`;
       }
@@ -506,7 +428,7 @@
     tip.setAttribute('aria-hidden', 'true'); // Inhalte stehen Screenreadern per aria-describedby zur Verfügung
     map.append(tip);
     const scroller = map.parentElement;
-    const topbar = document.querySelector('.topbar');
+    const topbar = document.querySelector('.navbar');
 
     const chip = (m) => {
       const region = regionsById.get(m.region);
@@ -749,6 +671,14 @@
   document.querySelectorAll('[data-count]').forEach((el) => {
     el.textContent = { jobs: DATA.jobs.length, modules: DATA.modules.length }[el.dataset.count] ?? '';
   });
+
+  const toTop = document.querySelector('[data-to-top]');
+  if (toTop) {
+    const update = () => toTop.classList.toggle('is-visible', window.scrollY > 600);
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+    toTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: reducedMotion.matches ? 'auto' : 'smooth' }));
+  }
 
   const map = document.getElementById('eit-map');
   if (!map || !DATA) return;

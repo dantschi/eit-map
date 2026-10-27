@@ -318,6 +318,13 @@ const ICONS = {
     <path d="M27 40c0 6 2 10 5 15 3-5 5-9 5-15"/>`,
 
   /* ---------- Duales Studium ---------- */
+  kalender: `
+    <rect class="acc" x="8" y="12" width="48" height="44" rx="3"/>
+    <path d="M8 24h48M20 6v12M44 6v12"/>
+    <path d="M18 34h6M29 34h6M40 34h6M18 45h6M29 45h6"/>`,
+  uhr: `
+    <circle class="acc" cx="32" cy="32" r="24"/>
+    <path d="M32 16v16l11 7"/>`,
   gehalt: `
     <circle class="acc" cx="32" cy="32" r="22"/>
     <path d="M40.4 24.3A10 10 0 1 0 40.4 39.7"/>
@@ -340,10 +347,10 @@ ${entries.join('\n')}
 };
 `);
 
-// Favicon: Blitz in einer Kartenmarkierung
+// Favicon im Corporate Design: weißer Blitz auf DHBW-Rot
 writeFileSync(join(ROOT, 'assets', 'favicon.svg'), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-<circle cx="32" cy="32" r="29" fill="#fbf7ef" stroke="#1c7ed6" stroke-width="4"/>
-<path d="M35 10 18 36h12l-4 19 18-27H33z" fill="#ffd43b" stroke="#1b1f3a" stroke-width="3" stroke-linejoin="round"/>
+<rect width="64" height="64" fill="#e2001a"/>
+<path d="M36 8 18 36h12l-4 20 20-29H34z" fill="#fff"/>
 </svg>
 `);
 

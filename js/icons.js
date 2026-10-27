@@ -46,6 +46,8 @@ window.EIT_ICONS = {
   "beratung": "<path class=\"acc\" d=\"M8 10h30a4 4 0 0 1 4 4v14a4 4 0 0 1-4 4H20l-8 7v-7H8a4 4 0 0 1-4-4V14a4 4 0 0 1 4-4z\"/><path class=\"bg\" d=\"M28 38v-6a4 4 0 0 1 4-4h24a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4h-2v7l-8-7H32a4 4 0 0 1-4-4z\"/><path d=\"M11 18h24M11 24h14M35 37h17M35 42h10\"/>",
   "patent": "<path class=\"acc\" d=\"M14 6h24l12 12v38H14z\"/><path d=\"M38 6v12h12\"/><path d=\"M20 24h18M20 31h24M20 38h10\"/><path class=\"bg\" d=\"M35 49l-2 11 6-3 6 3-2-11\"/><circle class=\"bg\" cx=\"39\" cy=\"45\" r=\"7\"/>",
   "karriere": "<path class=\"acc\" d=\"M32 6c8 6 12 16 10 30H22C20 22 24 12 32 6z\"/><circle class=\"bg\" cx=\"32\" cy=\"21\" r=\"4\"/><path d=\"M22.5 29 15 37v7l8.5-4M41.5 29l7.5 8v7l-8.5-4\"/><path d=\"M27 40c0 6 2 10 5 15 3-5 5-9 5-15\"/>",
+  "kalender": "<rect class=\"acc\" x=\"8\" y=\"12\" width=\"48\" height=\"44\" rx=\"3\"/><path d=\"M8 24h48M20 6v12M44 6v12\"/><path d=\"M18 34h6M29 34h6M40 34h6M18 45h6M29 45h6\"/>",
+  "uhr": "<circle class=\"acc\" cx=\"32\" cy=\"32\" r=\"24\"/><path d=\"M32 16v16l11 7\"/>",
   "gehalt": "<circle class=\"acc\" cx=\"32\" cy=\"32\" r=\"22\"/><path d=\"M40.4 24.3A10 10 0 1 0 40.4 39.7\"/><path d=\"M20 29h14M20 35h14\"/>",
   "kurse": "<circle class=\"acc\" cx=\"32\" cy=\"22\" r=\"6.5\"/><path d=\"M19 48c0-8.5 5.5-14 13-14s13 5.5 13 14\"/><circle cx=\"15\" cy=\"27\" r=\"4.5\"/><path d=\"M5 46c0-6.5 4-10.5 10-10.5 2.5 0 4.5.7 6 2\"/><circle cx=\"49\" cy=\"27\" r=\"4.5\"/><path d=\"M59 46c0-6.5-4-10.5-10-10.5-2.5 0-4.5.7-6 2\"/>",
 };

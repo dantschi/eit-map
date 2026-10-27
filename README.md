@@ -1,8 +1,8 @@
 # Map of Electrical Engineering
 
-Interaktiver One-Pager zur Bewerbung des Studiengangs **Elektro- und Informationstechnik an der DHBW Stuttgart** – inspiriert von [Map of Mathematics](https://dosmaps.com/momathematics).
+Interaktiver One-Pager zur Bewerbung des Studiengangs **Elektrotechnik und Informationstechnik an der DHBW Stuttgart** – im Corporate Design der DHBW Stuttgart, die Idee inspiriert von der [Map of Mathematics](https://dosmaps.com/momathematics).
 
-Die Karte zeigt, **wohin das Studium führt**: oben 34 aktuelle Berufsbilder in sieben Berufsfeldern, in der Mitte die Studienrichtungen **Automation, Elektronik und Nachrichtentechnik** samt Wahlbaukasten, unten das gemeinsame **Fundament**. Fährt man über ein Berufsbild, leuchten die Module auf, die darauf vorbereiten – und umgekehrt.
+Die Karte zeigt, **wohin das Studium führt**: oben 34 aktuelle Berufsbilder in sieben Berufsfeldern, in der Mitte die Studienrichtungen **Automation und Elektronik** samt Wahlbaukasten, unten das gemeinsame **Fundament**. Fährt man über ein Berufsbild, leuchten die Module auf, die darauf vorbereiten – und umgekehrt.
 
 Grundlage sind die Modulhandbücher Elektrotechnik und Informationstechnik der DHBW Stuttgart (Stand 27.10.2026).
 
@@ -39,13 +39,13 @@ Aktuelle Versionen von Chrome, Edge, Firefox und Safari (etwa seit 2023). Genutz
 
 ## Funktionen
 
-- **Poster-Stil** angelehnt an die Map of Mathematics: gezeichnete Regionen, Icons, handschriftliche Titel. Hell (Papier) oder dunkel (Nachtkarte) – folgt der Systemeinstellung, umschaltbar oben rechts.
+- **Corporate Design der DHBW Stuttgart**: DHBW-Rot, Grautöne und Weiß, klare Kanten, Serifen-Headlines, dunkelgraue Navigationsleiste und roter Infokasten wie auf der Studiengangsseite. Zusätzlich ein dunkles Farbschema – folgt der Systemeinstellung, umschaltbar in der Navigationsleiste.
 - **Verbindungen Modul ↔ Beruf**: Hover (Maus), Fokus (Tastatur) oder Tippen (Touch) zeigt ein Infofenster und zeichnet animierte Linien zu allen zugehörigen Modulen bzw. Berufsbildern.
 - **Flussband**: Animierte Bänder zeigen, wie viele Module einer Studienrichtung in welches Berufsfeld führen.
 - **Filter**: „Meine Studienrichtung“ hebt angebotene Module und passende Berufsbilder hervor; ein Klick auf einen Regionstitel hebt das ganze Berufsfeld bzw. die Studienrichtung hervor.
 - **Berufsbilder als Liste** unter der Karte – übersichtlich auf dem Smartphone, mit „Auf der Map zeigen“.
 - **Barrierearm**: Einträge sind echte Buttons mit Beschreibung für Screenreader, `Esc` schließt Infofenster, `prefers-reduced-motion` schaltet Animationen ab.
-- **Datenschutzfreundlich**: keine externen Requests – die Schriften (Space Grotesk, Caveat; OFL) sind lokal eingebettet.
+- **Datenschutzfreundlich**: keine externen Requests – die Schriften (Fira Sans, Source Serif 4; OFL) sind lokal eingebettet.
 
 ## Aufbau
 
@@ -63,6 +63,12 @@ tools/render-og-image.cjs  erzeugt og-image.png aus der echten Karte
 tools/check-data.cjs       prüft js/data.js (läuft auch vor jeder Veröffentlichung)
 .github/workflows/pages.yml  veröffentlicht die Seite auf GitHub Pages
 ```
+
+## Corporate Design
+
+- **Farben** stehen als Tokens am Anfang von `css/style.css` (`--red` = DHBW-Rot `#E2001A`, Grautöne, Varianten für das dunkle Schema).
+- **Schriften:** Die Hausschrift der DHBW ist lizenzpflichtig. Eingebettet sind deshalb freie, sehr ähnliche Schriften: Fira Sans (aus der Meta-Familie entwickelt) und Source Serif 4 für Headlines. Liegt eine Lizenz für die Hausschrift vor, genügt es, `--font` und `--serif` umzustellen.
+- **Logo:** Das offizielle Logo ist nicht nachgebaut. In `index.html` ist im Kopfbereich die Stelle markiert, an der die Original-Datei aus dem CD-Paket eingesetzt wird.
 
 ## Inhalte anpassen
 
@@ -104,4 +110,4 @@ node tools/render-og-image.cjs       # Vorschaubild → assets/og-image.png
 
 ## Lizenzen
 
-Schriften: Space Grotesk und Caveat, SIL Open Font License 1.1 (`assets/fonts/`). Icons und Grafiken sind eigens für dieses Projekt erstellt.
+Schriften: Fira Sans und Source Serif 4, SIL Open Font License 1.1 (`assets/fonts/`). Icons und Grafiken sind eigens für dieses Projekt erstellt.
