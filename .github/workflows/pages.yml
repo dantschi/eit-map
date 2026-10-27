@@ -1,0 +1,68 @@
+# Veröffentlicht die Webseite auf GitHub Pages.
+#
+# Einmalig einrichten: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Danach wird bei jedem Push auf den Standard-Branch automatisch veröffentlicht.
+# Manuell: Actions → "Webseite veröffentlichen" → "Run workflow".
+name: Webseite veröffentlichen
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Immer nur eine Veröffentlichung gleichzeitig; eine laufende wird nicht abgebrochen.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Seite zusammenstellen
+    # Nur vom Standard-Branch veröffentlichen – unabhängig davon, wie er heißt.
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Inhalte prüfen
+        run: node tools/check-data.cjs
+
+      - name: GitHub Pages konfigurieren
+        id: pages
+        uses: actions/configure-pages@v6
+
+      - name: Seitendateien sammeln
+        run: |
+          mkdir _site
+          cp -r index.html css js assets _site/
+
+      - name: Vorschaubild-URL absolut setzen
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          sed -i "s|content=\"assets/og-image.png\"|content=\"${BASE_URL}/assets/og-image.png\"|" _site/index.html
+          grep -q "content=\"${BASE_URL}/assets/og-image.png\"" _site/index.html
+
+      - name: Artefakt hochladen
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    name: Veröffentlichen
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Auf GitHub Pages veröffentlichen
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -18,9 +18,18 @@ python3 -m http.server 8000   # → http://localhost:8000
 
 ## Veröffentlichen
 
-Die Seite ist rein statisch und kann auf jedem Webserver liegen – einfach den gesamten Ordner hochladen.
+Die Seite wird per **GitHub Action** (`.github/workflows/pages.yml`) automatisch auf **GitHub Pages** veröffentlicht: unter `https://<benutzer>.github.io/eit-map/`.
 
-Direkt aus diesem Repository mit **GitHub Pages**: *Settings → Pages → Build and deployment → Source: Deploy from a branch*, dann den Branch und den Ordner `/ (root)` wählen. Nach kurzer Zeit ist die Seite unter `https://<benutzer>.github.io/eit-map/` erreichbar.
+**Einmalig einrichten:** *Settings → Pages → Build and deployment → Source:* **GitHub Actions** wählen.
+
+Danach gilt:
+
+- Jeder Push auf den Standard-Branch veröffentlicht die Seite neu (Pushes auf andere Branches werden ignoriert).
+- Manuell: *Actions → „Webseite veröffentlichen“ → Run workflow*.
+- Vor dem Veröffentlichen prüft `tools/check-data.cjs` die Inhalte in `js/data.js`. Bei einem Fehler (z. B. fehlendes Icon, Tippfehler in einer ID) bricht der Lauf ab und die bisherige Version bleibt online – die Fehlermeldung steht im Log des Schritts „Inhalte prüfen“.
+- Veröffentlicht werden nur `index.html`, `css/`, `js/` und `assets/`; die `og:image`-Adresse für die Social-Media-Vorschau wird dabei automatisch auf die absolute URL gesetzt.
+
+Ohne GitHub: Die Seite ist rein statisch und kann auf jedem Webserver liegen – einfach die genannten Dateien hochladen.
 
 ## Browser-Unterstützung
 
@@ -49,6 +58,8 @@ assets/favicon.svg         Favicon (generiert)
 assets/og-image.png        Vorschaubild für Social Media (generiert)
 tools/generate-icons.mjs   erzeugt Icons und Favicon
 tools/render-og-image.cjs  erzeugt og-image.png aus der echten Karte
+tools/check-data.cjs       prüft js/data.js (läuft auch vor jeder Veröffentlichung)
+.github/workflows/pages.yml  veröffentlicht die Seite auf GitHub Pages
 ```
 
 ## Inhalte anpassen
@@ -69,9 +80,10 @@ Alle Inhalte stehen in **`js/data.js`** – dafür sind keine JavaScript-Kenntni
 
 ## Werkzeuge (optional)
 
-Nur nötig, wenn Icons oder Vorschaubild neu erzeugt werden sollen. Voraussetzung: [Node.js](https://nodejs.org/) ab Version 18.
+Nur nötig, wenn Inhalte lokal geprüft oder Icons bzw. Vorschaubild neu erzeugt werden sollen. Voraussetzung: [Node.js](https://nodejs.org/) ab Version 18.
 
 ```bash
+node tools/check-data.cjs            # js/data.js auf Fehler prüfen
 node tools/generate-icons.mjs        # Icons + Favicon → assets/
 npm install --no-save playwright     # einmalig, für das Vorschaubild
 npx playwright install chromium
@@ -84,7 +96,6 @@ node tools/render-og-image.cjs       # Vorschaubild → assets/og-image.png
 
 - [ ] Links „Zum Studiengang“ / „Zur Studiengangsseite“ auf die konkrete Studiengangsseite setzen (`TODO` in `index.html`)
 - [ ] Impressum und Datenschutzerklärung verlinken
-- [ ] `og:image` auf eine absolute URL umstellen
 - [ ] Stationen und Texte mit dem aktuellen Curriculum abgleichen
 
 ## Lizenzen
