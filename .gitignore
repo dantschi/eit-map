@@ -1,0 +1,25 @@
+# Abhängigkeiten der optionalen Werkzeuge (Playwright für das Vorschaubild)
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Playwright-Ausgaben
+test-results/
+playwright-report/
+
+# Lokale Umgebungsvariablen
+.env
+.env.*
+
+# Betriebssystem
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editoren und IDEs
+.vscode/
+.idea/
+*.swp
+*~
