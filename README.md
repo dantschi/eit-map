@@ -99,7 +99,6 @@ node tools/render-og-image.cjs       # Vorschaubild → assets/og-image.png
 
 ## Vor der Veröffentlichung
 
-- [ ] Links „Zum Studiengang“ / „Zur Studiengangsseite“ auf die konkrete Studiengangsseite setzen (`TODO` in `index.html`)
 - [ ] Impressum und Datenschutzerklärung verlinken
 - [ ] Zuordnung Module ↔ Berufsbilder und die Texte fachlich gegenlesen
 
