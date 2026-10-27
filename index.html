@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Map of Electrical Engineering · DHBW Stuttgart</title>
+  <meta name="description" content="Interaktive Karte des Studiengangs Elektro- und Informationstechnik an der DHBW Stuttgart: vom Fundament aus Mathematik und Physik zu Energietechnik, Mikroelektronik, KI und Robotik.">
+  <meta name="theme-color" content="#05060f">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Map of Electrical Engineering · DHBW Stuttgart">
+  <meta property="og:description" content="Vom Fundament zu den Zukunftsfeldern: Entdecke deinen Weg im dualen Studium Elektro- und Informationstechnik.">
+  <!-- TODO: nach dem Hosting durch eine absolute URL ersetzen (Social-Media-Vorschau braucht sie) -->
+  <meta property="og:image" content="assets/og-image.png">
+
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Farbschema vor dem ersten Rendern setzen (verhindert Aufblitzen) -->
+  <script>
+    (function () {
+      var theme = null;
+      try { theme = localStorage.getItem('eit-theme'); } catch (e) {}
+      if (!theme) theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <script src="js/data.js" defer></script>
+  <script src="js/main.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#map">Direkt zur Map</a>
+
+  <header class="topbar">
+    <a class="brand" href="#top">
+      <img class="brand__mark" src="assets/favicon.svg" alt="" width="30" height="30">
+      <span>EIT <small>DHBW Stuttgart</small></span>
+    </a>
+    <nav class="topbar__nav" aria-label="Seitennavigation">
+      <a href="#map">Map</a>
+      <a href="#start">Studienstart</a>
+      <a href="#kontakt">Kontakt</a>
+    </nav>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Farbschema wechseln">
+      <svg class="theme-toggle__moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+      <svg class="theme-toggle__sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <!-- ============ Hero ============ -->
+    <section class="hero" id="top">
+      <p class="eyebrow"><span class="eyebrow__dot"></span>Duales Studium · DHBW Stuttgart</p>
+      <h1 class="hero__title">
+        <span class="hero__kicker">Map of</span>
+        <span class="neon neon--flicker" data-branch="mikro">Electrical</span>
+        <span class="neon" data-branch="ki">Engineering</span>
+      </h1>
+      <p class="hero__sub">Studiengang Elektro- und Informationstechnik</p>
+      <p class="hero__lead">
+        Vom Fundament aus Mathematik und Physik wachsen vier Äste in die Zukunft:
+        Energietechnik, Mikroelektronik, Künstliche Intelligenz und Robotik.
+        Entdecke, wohin dich dein duales Studium führen kann.
+      </p>
+      <div class="hero__actions">
+        <a class="btn btn--primary" href="#map">
+          Map erkunden
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+        </a>
+        <!-- TODO: Link auf die Studiengangsseite anpassen -->
+        <a class="btn btn--ghost" href="https://www.dhbw-stuttgart.de/" rel="noopener">Zum Studiengang</a>
+      </div>
+      <ul class="facts" aria-label="Das Studium in Zahlen">
+        <li><strong data-branch="energie">3</strong><span>Jahre bis zum Bachelor of Engineering</span></li>
+        <li><strong data-branch="mikro">210</strong><span>ECTS-Punkte</span></li>
+        <li><strong data-branch="ki">2</strong><span>Lernorte: Hochschule &amp; Unternehmen</span></li>
+        <li><strong data-branch="robotik">ab Tag&nbsp;1</strong><span>monatliches Gehalt</span></li>
+      </ul>
+    </section>
+
+    <!-- ============ Map ============ -->
+    <section class="map-section" id="map" aria-labelledby="map-title">
+      <div class="section-head">
+        <p class="section-head__eyebrow">Die Karte</p>
+        <h2 id="map-title">Dein Weg durch die Elektrotechnik</h2>
+        <p class="section-head__hint">
+          <span class="only-hover">Fahre mit der Maus über eine Station – der Pfad vom Fundament leuchtet auf.</span>
+          <span class="only-touch">Tippe auf eine Station – der Pfad vom Fundament leuchtet auf.</span>
+        </p>
+        <ul class="legend" aria-label="Äste der Karte hervorheben">
+          <li><button class="chip" type="button" data-branch-chip="energie" data-branch="energie" aria-pressed="false">Energietechnik</button></li>
+          <li><button class="chip" type="button" data-branch-chip="mikro" data-branch="mikro" aria-pressed="false">Mikroelektronik</button></li>
+          <li><button class="chip" type="button" data-branch-chip="ki" data-branch="ki" aria-pressed="false">Künstliche Intelligenz</button></li>
+          <li><button class="chip" type="button" data-branch-chip="robotik" data-branch="robotik" aria-pressed="false">Robotik</button></li>
+          <li><button class="chip" type="button" data-branch-chip="fund" data-branch="fund" aria-pressed="false">Fundament</button></li>
+          <li><button class="chip" type="button" data-branch-chip="dual" data-branch="dual" aria-pressed="false">Duales Studium</button></li>
+        </ul>
+      </div>
+
+      <div class="map-scroller">
+        <div class="map" id="eit-map" role="group" aria-label="Interaktive Karte: Stationen des Studiums"></div>
+      </div>
+      <p class="swipe-hint" aria-hidden="true">← Wischen, um die ganze Map zu sehen →</p>
+      <noscript><p class="noscript">Die interaktive Karte benötigt JavaScript.</p></noscript>
+    </section>
+
+    <!-- ============ Studienstart ============ -->
+    <section class="steps" id="start" aria-labelledby="steps-title">
+      <div class="section-head">
+        <p class="section-head__eyebrow">Studienstart</p>
+        <h2 id="steps-title">In drei Schritten auf die Map</h2>
+      </div>
+      <ol class="steps__list">
+        <li class="step" data-branch="mikro">
+          <span class="step__num">01</span>
+          <h3>Partnerunternehmen finden</h3>
+          <p>Bewirb dich bei einem Unternehmen, das mit der DHBW Stuttgart kooperiert. Viele Firmen aus der Region suchen jedes Jahr dual Studierende.</p>
+        </li>
+        <li class="step" data-branch="ki">
+          <span class="step__num">02</span>
+          <h3>Vertrag unterschreiben</h3>
+          <p>Mit dem Studienvertrag bist du ab Studienbeginn angestellt – inklusive monatlicher Vergütung, auch während der Theoriephasen.</p>
+        </li>
+        <li class="step" data-branch="robotik">
+          <span class="step__num">03</span>
+          <h3>Durchstarten</h3>
+          <p>Theorie an der DHBW Stuttgart, Praxis im Unternehmen – im Wechsel, bis zum Bachelor of Engineering.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ============ Call to Action ============ -->
+    <section class="cta" id="kontakt" aria-labelledby="cta-title">
+      <div class="cta__panel">
+        <h2 id="cta-title">Bereit für <span class="neon" data-branch="energie">Hochspannung</span>?</h2>
+        <p>Lerne den Studiengang Elektro- und Informationstechnik kennen – stell deine Fragen, triff Studierende und Lehrende und finde deinen Ast auf der Map.</p>
+        <div class="hero__actions">
+          <!-- TODO: Links auf Studiengangsseite und Kontakt anpassen -->
+          <a class="btn btn--primary" href="https://www.dhbw-stuttgart.de/" rel="noopener">Zur Studiengangsseite</a>
+          <a class="btn btn--ghost" href="#map">Nochmal zur Map</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>© <span data-year>2026</span> DHBW Stuttgart · Studiengang Elektro- und Informationstechnik</p>
+    <!-- TODO: Impressum und Datenschutz verlinken -->
+    <nav aria-label="Rechtliches"><a href="#">Impressum</a><a href="#">Datenschutz</a></nav>
+  </footer>
+</body>
+</html>

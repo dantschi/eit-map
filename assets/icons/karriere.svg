@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128">
+<defs>
+<filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2"/></filter>
+<g id="shape" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M32 6c8 6 12 16 10 30H22C20 22 24 12 32 6z"/><circle cx="32" cy="21" r="4"/><path d="M22.5 29 15 37v7l8.5-4M41.5 29l7.5 8v7l-8.5-4"/><path d="M27 40c0 6 2 10 5 15 3-5 5-9 5-15"/></g>
+</defs>
+<use href="#shape" stroke="#ff3b5c" stroke-width="5" opacity=".55" filter="url(#glow)"/>
+<use href="#shape" stroke="#ff3b5c" stroke-width="2.8"/>
+<use href="#shape" stroke="#ffb1be" stroke-width="1.1"/>
+</svg>
